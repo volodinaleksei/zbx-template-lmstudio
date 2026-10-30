@@ -1,0 +1,183 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
+      name: Templates/Applications
+  templates:
+    - uuid: 840c29fa81d2477dba0b06bb74da02d0
+      template: 'LM Studio API'
+      name: 'LM Studio API'
+      groups:
+        - name: Templates/Applications
+      items:
+        - uuid: 6c4b985dcd7747fd88cdb35f5b590b39
+          name: 'LM Studio: models total'
+          type: DEPENDENT
+          key: lmstudio.models.count
+          history: 90d
+          description: 'Всего моделей в LM Studio.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data.length()
+          master_item:
+            key: lmstudio.models.raw
+        - uuid: cbdbbc845e9343589c9bf2f8658b0806
+          name: 'LM Studio: model list'
+          type: DEPENDENT
+          key: lmstudio.models.list
+          history: 7d
+          value_type: TEXT
+          description: 'Список всех моделей через запятую.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.data[*].id'
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var a = JSON.parse(value);
+                  return a.join(", ");
+          master_item:
+            key: lmstudio.models.raw
+        - uuid: bf6f1936acfe40928be8d8eb2fe5bb63
+          name: 'LM Studio: models loaded'
+          type: DEPENDENT
+          key: lmstudio.models.loaded.count
+          history: 90d
+          description: 'Сколько моделей сейчас загружено в память.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.data[?(@.state == "loaded")].id.length()'
+          master_item:
+            key: lmstudio.models.raw
+        - uuid: 243b0a6c193c444097783a43a10f12bb
+          name: 'LM Studio: loaded model list'
+          type: DEPENDENT
+          key: lmstudio.models.loaded.list
+          history: 7d
+          value_type: TEXT
+          description: 'Список загруженных моделей через запятую.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.data[?(@.state == "loaded")].id'
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var a = JSON.parse(value);
+                  return a.join(", ");
+          master_item:
+            key: lmstudio.models.raw
+        - uuid: fed1d00e845e44e19d6495fb7ae7d16c
+          name: 'LM Studio: models raw (v0)'
+          type: HTTP_AGENT
+          key: lmstudio.models.raw
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          description: 'Сырой JSON /api/v0/models — мастер для счётчиков, списков и LLD.'
+          timeout: 15s
+          url: 'http://{HOST.CONN}:{$LMSTUDIO_PORT}/api/v0/models'
+        - uuid: 975ae441fcee416f80163b27fbc620f1
+          name: 'LM Studio: API port'
+          type: SIMPLE
+          key: 'net.tcp.service[http,,{$LMSTUDIO_PORT}]'
+          history: 90d
+          description: 'Checks if the LM Studio API port is responsive.'
+          valuemap:
+            name: 'Service state'
+          triggers:
+            - uuid: 223a24082b8b4573ae4fd1d8b1d57091
+              expression: 'last(/LM Studio API/net.tcp.service[http,,{$LMSTUDIO_PORT}])=0'
+              name: 'TCP-порт LM Studio закрыт. Проверьте запущенный LM Studio server.'
+              event_name: 'LM Studio: порт {$LMSTUDIO_PORT} недоступен'
+              priority: HIGH
+              description: |
+                The Ollama API port is not responding.
+                Ensure that the Ollama service is running and accessible on the specified port.
+      discovery_rules:
+        - uuid: a06e863093394c569c5fba362c8ade98
+          name: 'LM Studio: models'
+          type: DEPENDENT
+          key: lmstudio.models.discovery
+          description: 'LLD: все модели LM Studio.'
+          item_prototypes:
+            - uuid: a07228b606354ad6a4dc71548ac4aa30
+              name: 'LM Studio: loaded flag of {#MODELID}'
+              type: DEPENDENT
+              key: 'lmstudio.model.loaded.flag[{#MODELID}]'
+              history: 7d
+              value_type: FLOAT
+              trends: '0'
+              description: '1 = модель загружена, 0 = не загружена.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[?(@.id == "{#MODELID}")].state'
+                - type: JAVASCRIPT
+                  parameters:
+                    - 'var a = JSON.parse(value); return (a.length && a[0] === "loaded") ? 1 : 0;'
+              master_item:
+                key: lmstudio.models.raw
+              trigger_prototypes:
+                - uuid: 4d58e9ac035e431abe6b7cd51c47e79a
+                  expression: 'last(/LM Studio API/lmstudio.model.loaded.flag[{#MODELID}])=0 and max(/LM Studio API/lmstudio.model.loaded.flag[{#MODELID}],24h)>0'
+                  name: 'Модель загружалась за последние 24 ч, но сейчас выгружена из памяти LM Studio.'
+                  event_name: 'LM Studio: модель {#MODELID} выгружена из памяти'
+                  priority: WARNING
+            - uuid: c4874192a2dc46c1b8a4e8550411f472
+              name: 'LM Studio: state of {#MODELID}'
+              type: DEPENDENT
+              key: 'lmstudio.model.state[{#MODELID}]'
+              history: 7d
+              value_type: TEXT
+              description: 'Состояние модели: loaded / not-loaded.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.data[?(@.id == "{#MODELID}")].state'
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var a = JSON.parse(value);
+                      return a.length ? a[0] : "";
+              master_item:
+                key: lmstudio.models.raw
+          master_item:
+            key: lmstudio.models.raw
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var d = JSON.parse(value).data;
+                  var out = [];
+                  for (var i = 0; i < d.length; i++) {
+                    out.push({
+                      "{#MODELID}": d[i].id,
+                      "{#TYPE}": d[i].type || "",
+                      "{#STATE}": d[i].state || "",
+                      "{#QUANTIZATION}": d[i].quantization || ""
+                    });
+                  }
+                  return JSON.stringify(out);
+      macros:
+        - macro: '{$LMSTUDIO_PORT}'
+          value: '1234'
+          description: 'LM Studio API port'
+      valuemaps:
+        - uuid: 08aa0b2f8d7848a6a298aced156bcfb5
+          name: 'Service state'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+  triggers:
+    - uuid: 80c0ab511fb34a9baf0ba4d6e039dbeb
+      expression: 'last(/LM Studio API/lmstudio.models.loaded.count)=0 and last(/LM Studio API/net.tcp.service[http,,{$LMSTUDIO_PORT}])=1'
+      recovery_mode: RECOVERY_EXPRESSION
+      recovery_expression: 'last(/LM Studio API/lmstudio.models.loaded.count)>0'
+      name: 'LM Studio: ни одной загруженной модели'
+      priority: WARNING
