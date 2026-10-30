@@ -15,7 +15,7 @@ zabbix_export:
           type: DEPENDENT
           key: lmstudio.models.count
           history: 90d
-          description: 'Всего моделей в LM Studio.'
+          description: 'Total number of models in LM Studio.'
           preprocessing:
             - type: JSONPATH
               parameters:
@@ -28,7 +28,7 @@ zabbix_export:
           key: lmstudio.models.list
           history: 7d
           value_type: TEXT
-          description: 'Список всех моделей через запятую.'
+          description: 'Comma-separated list of all models.'
           preprocessing:
             - type: JSONPATH
               parameters:
@@ -45,7 +45,7 @@ zabbix_export:
           type: DEPENDENT
           key: lmstudio.models.loaded.count
           history: 90d
-          description: 'Сколько моделей сейчас загружено в память.'
+          description: 'Number of models currently loaded into memory.'
           preprocessing:
             - type: JSONPATH
               parameters:
@@ -58,7 +58,7 @@ zabbix_export:
           key: lmstudio.models.loaded.list
           history: 7d
           value_type: TEXT
-          description: 'Список загруженных моделей через запятую.'
+          description: 'Comma-separated list of loaded models.'
           preprocessing:
             - type: JSONPATH
               parameters:
@@ -77,7 +77,7 @@ zabbix_export:
           delay: 5m
           history: '0'
           value_type: TEXT
-          description: 'Сырой JSON /api/v0/models — мастер для счётчиков, списков и LLD.'
+          description: 'Raw JSON of /api/v0/models — master item for counters, lists and LLD.'
           timeout: 15s
           url: 'http://{HOST.CONN}:{$LMSTUDIO_PORT}/api/v0/models'
         - uuid: 975ae441fcee416f80163b27fbc620f1
@@ -91,8 +91,8 @@ zabbix_export:
           triggers:
             - uuid: 223a24082b8b4573ae4fd1d8b1d57091
               expression: 'last(/LM Studio API/net.tcp.service[http,,{$LMSTUDIO_PORT}])=0'
-              name: 'TCP-порт LM Studio закрыт. Проверьте запущенный LM Studio server.'
-              event_name: 'LM Studio: порт {$LMSTUDIO_PORT} недоступен'
+              name: 'LM Studio TCP port is closed. Make sure the LM Studio server is running.'
+              event_name: 'LM Studio: port {$LMSTUDIO_PORT} unreachable'
               priority: HIGH
               description: |
                 The Ollama API port is not responding.
@@ -102,7 +102,7 @@ zabbix_export:
           name: 'LM Studio: models'
           type: DEPENDENT
           key: lmstudio.models.discovery
-          description: 'LLD: все модели LM Studio.'
+          description: 'LLD: all LM Studio models.'
           item_prototypes:
             - uuid: a07228b606354ad6a4dc71548ac4aa30
               name: 'LM Studio: loaded flag of {#MODELID}'
@@ -111,7 +111,7 @@ zabbix_export:
               history: 7d
               value_type: FLOAT
               trends: '0'
-              description: '1 = модель загружена, 0 = не загружена.'
+              description: '1 = model loaded, 0 = not loaded.'
               preprocessing:
                 - type: JSONPATH
                   parameters:
@@ -124,8 +124,8 @@ zabbix_export:
               trigger_prototypes:
                 - uuid: 4d58e9ac035e431abe6b7cd51c47e79a
                   expression: 'last(/LM Studio API/lmstudio.model.loaded.flag[{#MODELID}])=0 and max(/LM Studio API/lmstudio.model.loaded.flag[{#MODELID}],24h)>0'
-                  name: 'Модель загружалась за последние 24 ч, но сейчас выгружена из памяти LM Studio.'
-                  event_name: 'LM Studio: модель {#MODELID} выгружена из памяти'
+                  name: 'Model was loaded within the last 24h but is now unloaded from LM Studio memory.'
+                  event_name: 'LM Studio: model {#MODELID} unloaded from memory'
                   priority: WARNING
             - uuid: c4874192a2dc46c1b8a4e8550411f472
               name: 'LM Studio: state of {#MODELID}'
@@ -133,7 +133,7 @@ zabbix_export:
               key: 'lmstudio.model.state[{#MODELID}]'
               history: 7d
               value_type: TEXT
-              description: 'Состояние модели: loaded / not-loaded.'
+              description: 'Model state: loaded / not-loaded.'
               preprocessing:
                 - type: JSONPATH
                   parameters:
@@ -179,5 +179,5 @@ zabbix_export:
       expression: 'last(/LM Studio API/lmstudio.models.loaded.count)=0 and last(/LM Studio API/net.tcp.service[http,,{$LMSTUDIO_PORT}])=1'
       recovery_mode: RECOVERY_EXPRESSION
       recovery_expression: 'last(/LM Studio API/lmstudio.models.loaded.count)>0'
-      name: 'LM Studio: ни одной загруженной модели'
+      name: 'LM Studio: no model loaded'
       priority: WARNING
